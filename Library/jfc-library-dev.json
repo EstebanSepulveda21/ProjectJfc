@@ -1,0 +1,18 @@
+{
+  "Environment": "dev",
+  "VpcCidr": "10.20.0.0/16",
+  "ImageTag": "latest",
+  "DesiredCount": "1",
+  "MinCapacity": "1",
+  "MaxCapacity": "4",
+  "pDbCredentialsSecretArn": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:jfc/dev/database-creds-XXXXXX",
+  "EcsTaskExecutionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/jfc-dev-ecs-execution-role",
+  "EcsTaskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/jfc-dev-ecs-task-role",
+  "DbName": "jfc",
+  "AuroraStackName": "jfc-dev-rds-aurora",
+  "DatabaseSecretArn": "arn:aws:secretsmanager:us-east-1:ACCOUNT_ID:secret:JFC-secretrds-admin-dev",
+  "TargetGroupArn": "arn:aws:elasticloadbalancing:us-east-1:ACCOUNT_ID:targetgroup/jfc-dev-tg/XXXXXXXXXXXXX",
+  "DomainName": "dev.jfc-ecommerce.example.com",
+  "HostedZoneId": "ZXXXXXXXXXXXXX",
+  "TemplateBaseUrl": "https://jfc-iac-artifacts.s3.us-east-1.amazonaws.com/templates"
+}
