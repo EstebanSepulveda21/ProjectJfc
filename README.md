@@ -6,7 +6,7 @@
 
 ## 📋 Descripción
 
-Se diseñó una arquitectura AWS moderna para soportar la aplicación de e-commerce de JFC, enfocada en **escalabilidad, alta disponibilidad, seguridad, rendimiento, observabilidad y optimización de costos**.
+Se diseñó una arquitectura AWS moderna para soportar la aplicación de JFC, enfocada en **escalabilidad, alta disponibilidad, seguridad, rendimiento, observabilidad y optimización de costos**.
 
 La solución utiliza servicios administrados y serverless para reducir la gestión manual de infraestructura y permitir que la plataforma se adapte automáticamente a cambios en la demanda.
 
