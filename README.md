@@ -113,7 +113,7 @@ DEV
 QA
 PDN
 
-Los despliegues se automatizan mediante Azure DevOps Pipelines, incluyendo validación, publicación de templates, despliegue progresivo y aprobación antes de producción
+Los despliegues se automatizan mediante Azure DevOps Pipelines, incluyendo validación, publicación de templates, despliegue progresivo y aprobación antes de producción.
 Esto permite reutilizar los mismos templates para **DEV, QA y PDN**, modificando únicamente los parámetros correspondientes dentro de las librerías (Se coloca una especie de MOCK ya que no se tiene acceso a crear por ahora una librerías a nivel interno del repositorio).
 
 ---
@@ -133,8 +133,7 @@ Stage: Validar (Linter)
  │
  ▼
 Stage: Desplegar DEV (jfc-development env)
- │  (Despliegue modular secuencial:
- │   Red -> KMS -> ECR -> ECS -> RDS -> Proxy)
+ │  (Despliegue modular)
  │
  ▼
 Stage: Desplegar QA (jfc-qa env)
