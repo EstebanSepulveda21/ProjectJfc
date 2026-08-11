@@ -2,7 +2,7 @@
 
 ![Diagrama](DiagramaArquitectura.jpeg)
 
-# 🛒 JFC E-commerce – AWS CloudOps
+# 🛒 JFC
 
 ## 📋 Descripción
 
