@@ -1,0 +1,22 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Route53 DNS.
+
+Parameters:
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+  DomainName:
+    Type: String
+  CloudFrontDomainName:
+    Type: String
+
+Resources:
+
+  FrontendRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        HostedZoneId: Z2FDTNDATAQYW2
+        DNSName: !Ref CloudFrontDomainName

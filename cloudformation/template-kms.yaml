@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Infrastructure - Master KMS Key Stack
+
+Parameters:
+  Environment:
+    Description: Environment name (e.g., dev, prod)
+    Type: String
+  AWSKeyManagementServicePowerUser:
+    Description: Standard policy ARN for users who need key access via IAM
+    Type: String
+    Default: arn:aws:iam::aws:policy/AWSKeyManagementServicePowerUser
+
+Resources:
+  KmsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub "JFC Master Key for ${Environment} - managed by ${AWS::StackName}"
+      EnableKeyRotation: true
+      PendingWindowInDays: 30
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-policy-basic
+        Statement:
+        - Sid: Enable IAM User Permissions
+          Effect: Allow
+          Principal:
+            AWS: !Sub "arn:aws:iam::${AWS::AccountId}:root"
+          Action:
+          - "kms:*"
+          Resource: '*'
+
+  KmsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub "alias/jfc-kms-${Environment}"
+      TargetKeyId: !Ref KmsKey
+
+  KmsKeyParameterStore:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Description: JFC Master KMS Key ID
+      Type: String
+      Name: !Sub "jfc-kms-id-${Environment}" # Nombre estandarizado
+      Value: !Ref KmsKey
+
+Outputs:
+  KmsKeyArn:
+    Description: ARN completo de la clave KMS JFC Master.
+    Value: !GetAtt KmsKey.Arn
+    Export:
+      Name: !Sub "jfc-master-kms-arn-${Environment}"

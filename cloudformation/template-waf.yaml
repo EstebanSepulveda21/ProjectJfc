@@ -1,0 +1,49 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC WAF protection.
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub jfc-${Environment}-waf
+      Scope: CLOUDFRONT
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub jfc-${Environment}-waf
+        SampledRequestsEnabled: true
+      Rules:
+      - Name: AWSManagedCommonRules
+        Priority: 1
+        OverrideAction:
+          None: {}
+        Statement:
+          ManagedRuleGroupStatement:
+            VendorName: AWS
+            Name: AWSManagedRulesCommonRuleSet
+        VisibilityConfig:
+          CloudWatchMetricsEnabled: true
+          MetricName: jfc-common-rules
+          SampledRequestsEnabled: true
+      - Name: AWSManagedKnownBadInputs
+        Priority: 2
+        OverrideAction:
+          None: {}
+        Statement:
+          ManagedRuleGroupStatement:
+            VendorName: AWS
+            Name: AWSManagedRulesKnownBadInputsRuleSet
+        VisibilityConfig:
+          CloudWatchMetricsEnabled: true
+          MetricName: jfc-known-bad-inputs
+          SampledRequestsEnabled: true
+
+Outputs:
+  WebAclArn:
+    Value: !GetAtt WebACL.Arn

@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: JFC observability.
+
+Parameters:
+  Environment:
+    Type: String
+  ClusterName:
+    Type: String
+  ServiceName:
+    Type: String
+
+Resources:
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub jfc-${Environment}-alerts
+
+  HighCpuAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub jfc-${Environment}-ecs-high-cpu
+      Namespace: AWS/ECS
+      MetricName: CPUUtilization
+      Dimensions:
+      - Name: ClusterName
+        Value: !Ref ClusterName
+      - Name: ServiceName
+        Value: !Ref ServiceName
+      Statistic: Average
+      Period: 60
+      EvaluationPeriods: 5
+      Threshold: 75
+      ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+      - !Ref AlertTopic
+
+  OperationsDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub jfc-${Environment}-operations
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "title": "ECS CPU",
+                "region": "${AWS::Region}",
+                "metrics": [
+                  [
+                    "AWS/ECS",
+                    "CPUUtilization",
+                    "ClusterName",
+                    "${ClusterName}",
+                    "ServiceName",
+                    "${ServiceName}"
+                  ]
+                ],
+                "period": 60,
+                "stat": "Average"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  AlertTopicArn:
+    Value: !Ref AlertTopic

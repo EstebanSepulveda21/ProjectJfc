@@ -1,0 +1,26 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC ACM certificate.
+
+Parameters:
+  DomainName:
+    Type: String
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+
+Resources:
+
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+      - DomainName: !Ref DomainName
+      - HostedZoneId: !Ref HostedZoneId
+      Tags:
+      - Key: Name
+        Value: JFC Certificate
+
+Outputs:
+  CertificateArn:
+    Value: !Ref Certificate

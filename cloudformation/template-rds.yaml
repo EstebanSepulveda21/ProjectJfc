@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Aurora PostgreSQL Serverless v2 (Pila modular de Datos)
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Entorno de despliegue (ej: dev, pdn).
+    AllowedValues: [dev, pdn]
+  DbName:
+    Type: String
+    Description: Nombre lógico de la base de datos inicial (ej: jfc).
+    Default: jfc
+  pEngineVersion:
+    Type: String
+    Description: Versión específica del motor Aurora PostgreSQL (ej: 15.4).
+    Default: '15.4'
+  pDbUsername:
+    Type: String
+    Description: Nombre del usuario maestro administrador de la base de datos.
+    Default: jfcadmin
+  DatabaseSubnetGroup:
+    Type: String
+    Description: Nombre del grupo de subredes de la base de datos (Output de la pila de red).
+  DatabaseSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: ID del grupo de seguridad de la base de datos (Output de la pila de seguridad).
+
+Resources:
+  DatabaseCluster:
+    Type: AWS::RDS::DBCluster
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: aurora-postgresql
+      EngineVersion: !Ref pEngineVersion
+      DatabaseName: !Ref DbName
+      DBClusterIdentifier: !Sub "${DbName}-rds-cluster-${Environment}"
+      MasterUsername: 
+        Fn::Join: ['', [ '{{resolve:secretsmanager:', {Ref: SecretAdminRds},':SecretString:username}}']]
+      ManageMasterUserPassword:
+          Fn::Join: ['', [ '{{resolve:secretsmanager:', {Ref: SecretAdminRds},':SecretString:password}}']]
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VpcSecurityGroupIds:
+        - !Ref DatabaseSecurityGroupId
+      DeletionProtection: true 
+      StorageEncrypted: true 
+      KmsKeyId: !ImportValue !Sub "jfc-master-kms-arn-${Environment}"
+      AutoMinorVersionUpgrade: true
+      BackupRetentionPeriod: 7
+      CopyTagsToSnapshot: true
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0.5
+        MaxCapacity: 16
+      EnableCloudWatchLogsExports:
+        - postgres 
+      Tags:
+        - Key: Name
+          Value: !Sub "JFC-${Environment}-RDS-Cluster"
+        - Key: Environment
+          Value: !Ref Environment
+
+  SecretAdminRds:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name:
+        Fn::Sub: 'JFC-secretrds-admin-${Environment}'
+      Description: 
+        Fn::Sub: 'Secreto de usuario admin para base de datos'
+      KmsKeyId: !ImportValue !Sub "jfc-master-kms-arn-${Environment}"
+      GenerateSecretString:
+        SecretStringTemplate: '{"username:" ${pDbUsername}}'
+        GenerateStringKey: "password"
+        PasswordLength: 30
+        ExcludeCharacters: '"@/\'
+
+  DatabaseWriter:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DatabaseCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      DBInstanceIdentifier: !Sub "${DbName}-rds-instance-writer-${Environment}"
+      Tags:
+        - Key: Name
+          Value: !Sub "jfc-${Environment}-db-writer"
+
+  DataBaseReader:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DatabaseCluster
+      DBInstanceClass: db.serverless
+      Engine: aurora-postgresql
+      PubliclyAccessible: false
+      DBInstanceIdentifier: !Sub "${DbName}-rds-instance-reader-${Environment}"
+      Tags:
+        - Key: Name
+          Value: !Sub "jfc-${Environment}-db-reader"
+
+Outputs:
+  DatabaseClusterIdentifier:
+    Description: El identificador único del clúster de base de datos Aurora.
+    Value: !Ref DatabaseCluster
+    Export:
+      Name: !Sub "${AWS::StackName}-ClusterIdentifier-${Environment}"
+
+  DatabaseEndpoint:
+    Description: El endpoint de conexión para el escritor del clúster de base de datos.
+    Value: !GetAtt DatabaseCluster.Endpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-Endpoint-${Environment}"
+
+  DatabaseReaderEndpoint:
+    Description: El endpoint de conexión para los lectores del clúster (Balanceo de carga).
+    Value: !GetAtt DatabaseCluster.ReadEndpoint
+    Export:
+      Name: !Sub "${AWS::StackName}-ReaderEndpoint-${Environment}"

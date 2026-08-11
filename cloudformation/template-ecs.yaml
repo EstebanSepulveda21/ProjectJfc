@@ -1,0 +1,139 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Infrastructure - ECS Fargate backend service (Corrected & Fully Integrated).
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Entorno de despliegue (ej: dev, pdn).
+    AllowedValues: [dev, pdn] 
+  AppSubnetA:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID de la subred de aplicación en AZ-A (Privada).
+  AppSubnetB:
+    Type: AWS::EC2::Subnet::Id
+    Description: ID de la subred de aplicación en AZ-B (Privada).
+  ApplicationSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+    Description: ID del grupo de seguridad para las tareas ECS.
+  
+  TargetGroupArn:
+    Type: String
+    Description: ARN del Target Group del ALB para enrutar tráfico.
+  
+  EcsTaskExecutionRoleArn:
+    Type: AWS::IAM::Role::Arn 
+    Description: ARN del rol de ejecución (permite a ECS descargar la imagen, logs Y LEER SECRETOS).
+  EcsTaskRoleArn:
+    Type: AWS::IAM::Role::Arn
+    Description: ARN del rol de la tarea (permisos para el código de la aplicación).
+
+  pDbCredentialsSecretArn:
+    Type: String
+    Description: ARN del Secreto en Secrets Manager con usuario/contraseña de DB.
+  DesiredCount:
+    Type: Number
+    Default: 2
+    Description: Cantidad deseada de tareas activas.
+  
+  ImageTag:
+    Type: String
+    Description: Tag de la imagen a desplegar (ej: v1.0.5, latest).
+    Default: latest
+
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub jfc-cluster-${Environment}
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/ecs/jfc/${Environment}/backend
+      RetentionInDays: 30 
+  TaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub jfc-backend-${Environment}
+      Cpu: '512'    
+      Memory: '1024'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE 
+      ExecutionRoleArn: !Ref EcsTaskExecutionRoleArn 
+      TaskRoleArn: !Ref EcsTaskRoleArn 
+      
+      ContainerDefinitions:
+        - Name: backend
+          Image: !Sub 
+            - "${UriBase}:${Tag}"
+            - UriBase: !ImportValue !Sub "jfc-ecr-uri-backend-${Environment}"
+              Tag: !Ref ImageTag
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: DB_HOST
+              Value: !ImportValue !Sub "jfc-rds-proxy-endpoint-${Environment}"
+            - Name: DB_NAME
+              Value: jfc
+          Secrets:
+            - Name: DB_USER 
+              ValueFrom: !Sub "${pDbCredentialsSecretArn}:username::"
+            - Name: DB_PASSWORD 
+              ValueFrom: !Sub "${pDbCredentialsSecretArn}:password::"
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - curl -f http://localhost:8080/health || exit 1
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 30
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref LogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: backend
+
+  Service:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Sub jfc-backend-service-${Environment}
+      Cluster: !Ref Cluster
+      LaunchType: FARGATE
+      DesiredCount: !Ref DesiredCount
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref AppSubnetA
+            - !Ref AppSubnetB
+          SecurityGroups:
+            - !Ref ApplicationSecurityGroupId
+      LoadBalancers:
+        - ContainerName: backend
+          ContainerPort: 8080
+          TargetGroupArn: !Ref TargetGroupArn
+
+Outputs:
+  ClusterName:
+    Value: !Ref Cluster
+    Export:
+      Name: !Sub "jfc-ecs-cluster-name-${Environment}"
+  
+  ServiceName:
+    Value: !GetAtt Service.Name
+    Export:
+      Name: !Sub "jfc-ecs-service-name-${Environment}"

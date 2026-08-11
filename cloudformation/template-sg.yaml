@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  JFC security groups with least-privilege network access.
+
+Parameters:
+  Environment:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+
+Resources:
+
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTPS traffic to ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - Description: HTTPS from Internet
+        IpProtocol: tcp
+        FromPort: 443
+        ToPort: 443
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: !Sub jfc-${Environment}-alb-sg
+
+  ApplicationSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic only from ALB
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - Description: Backend traffic from ALB
+        IpProtocol: tcp
+        FromPort: 8080
+        ToPort: 8080
+        SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub jfc-${Environment}-application-sg
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow PostgreSQL only from application
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - Description: PostgreSQL from application
+        IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub jfc-${Environment}-database-sg
+
+  CacheSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow Redis/Valkey from application
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - Description: Valkey traffic
+        IpProtocol: tcp
+        FromPort: 6379
+        ToPort: 6379
+        SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub jfc-${Environment}-cache-sg
+
+  RDSProxySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow database traffic from application
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+      - Description: AuroraPostgreSQL from application
+        IpProtocol: tcp
+        FromPort: 5432
+        ToPort: 5432
+        SourceSecurityGroupId: !Ref ApplicationSecurityGroup
+      Tags:
+      - Key: Name
+        Value: !Sub jfc-${Environment}-rds-proxy-sg
+
+Outputs:
+  AlbSecurityGroupId:
+    Value: !Ref AlbSecurityGroup
+  ApplicationSecurityGroupId:
+    Value: !Ref ApplicationSecurityGroup
+  DatabaseSecurityGroupId:
+    Value: !Ref DatabaseSecurityGroup
+  CacheSecurityGroupId:
+    Value: !Ref CacheSecurityGroup
+  RDSProxySecurityGroupId:
+    Value: !Ref RDSProxySecurityGroup

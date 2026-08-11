@@ -1,0 +1,119 @@
+# azure-pipelines.yml
+parameters:
+- name: ambiente
+  displayName: Ambiente
+  type: string
+  default: qa
+  values: [ dev, qa, pdn ]
+- name: recursos
+  displayName: Desplegar recurso individual
+  type: string
+  default: rds
+  values:
+  - acm
+  - alb
+  - asg
+  - cache
+  - cw
+  - ecr
+  - ecs
+  - iam
+  - kms
+  - network
+  - rdsproxy
+  - rds
+  - route53
+  - s3frontend
+  - securityservices
+  - sg
+  - waf
+
+trigger:
+  branches:
+    include:
+    - main
+    - feature/*
+
+variables:
+  system.debug: true
+  projectName: 'JFC'
+  awsRegion: 'us-east-1'
+  awsServiceConnection: 'JFC-AWS-ServiceConnection'
+  templatesFolder: '$(System.DefaultWorkingDirectory)/cloudformation'
+  configFolder: '$(System.DefaultWorkingDirectory)/config'
+
+stages:
+- stage: linters
+  displayName: 'Validar Plantillas CFN'
+  jobs:
+  - job: ValidateTemplates
+    displayName: 'Validar Sintaxis y CFN-Lint'
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+    - bash: pip install cfn-lint
+      displayName: 'Instalar cfn-lint'
+    - task: AWSShellScript@1
+      displayName: 'Validar Plantillas con credenciales temporales'
+      inputs:
+        awsCredentials: $(awsServiceConnection)
+        regionName: $(awsRegion)
+        scriptType: 'inline'
+        inlineScript: |
+          echo "Validando plantillas en $(templatesFolder)..."
+
+          # Validación de AWS CLI (básica) - Solo los archivos .yaml relevantes
+          for file in $(templatesFolder)/*.yaml; do
+            echo "Validando sintaxis AWS CLI: $file"
+            aws cloudformation validate-template --template-body file://$file --region $(awsRegion) || exit 1
+          done
+
+          # Validación de cfn-lint (profunda)
+          echo "Ejecutando cfn-lint..."
+          cfn-lint $(templatesFolder)/*.yaml
+
+- stage: deploy_dev
+  displayName: 'Deploy Dev'
+  dependsOn: linters
+  condition: eq('${{ parameters.ambiente }}', 'dev')
+  variables:
+    env: 'dev'
+  jobs:
+  - template: templates/jobs/deploy-cloudformation.yml
+    parameters:
+      serviceConnection: $(awsServiceConnection)
+      region: $(awsRegion)
+      stackName: '$(projectName)-$(env)-${{ parameters.recursos }}'
+      templatePath: '$(templatesFolder)/template-${{ parameters.recursos }}.yaml'
+      paramsPath: '$(configFolder)/params-$(env).json'
+
+- stage: deploy_qa
+  displayName: 'Deploy Qa'
+  dependsOn: linters
+  condition: eq('${{ parameters.ambiente }}', 'qa')
+  variables:
+    env: 'qa'
+  jobs:
+  - template: templates/jobs/deploy-cloudformation.yml
+    parameters:
+      serviceConnection: $(awsServiceConnection)
+      region: $(awsRegion)
+      stackName: '$(projectName)-$(env)-${{ parameters.recursos }}'
+      templatePath: '$(templatesFolder)/template-${{ parameters.recursos }}.yaml'
+      paramsPath: '$(configFolder)/params-$(env).json'
+
+- stage: deploy_pdn
+  displayName: 'Deploy Pdn'
+  dependsOn: linters
+  condition: eq('${{ parameters.ambiente }}', 'pdn')
+  variables:
+    env: 'pdn'
+  jobs:
+  - template: templates/jobs/deploy-cloudformation.yml
+    parameters:
+      serviceConnection: $(awsServiceConnection)
+      region: $(awsRegion)
+      stackName: '$(projectName)-$(env)-${{ parameters.recursos }}'
+      templatePath: '$(templatesFolder)/template-${{ parameters.recursos }}.yaml'
+      paramsPath: '$(configFolder)/params-$(env).json'

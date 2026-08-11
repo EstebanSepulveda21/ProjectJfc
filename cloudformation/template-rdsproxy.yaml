@@ -1,0 +1,77 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Infrastructure - RDS Proxy para Aurora PostgreSQL (Pila Modular).
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Entorno de despliegue (ej: dev, pdn).
+    AllowedValues: [dev, pdn]
+    ConstraintDescription: Debe ser dev o pdn.
+  AuroraStackName:
+    Type: String
+    Description: Nombre de la pila CloudFormation que creó el clúster Aurora base para importar su ID.
+  DatabaseSecretArn:
+    Type: String
+    Description: ARN del secreto de Secrets Manager con las credenciales de la base de datos.
+
+Resources:
+
+  ProxyRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub jfc-${Environment}-rds-proxy-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - rds.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: ReadDatabaseSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref DatabaseSecretArn
+
+  Proxy:
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub jfc-${Environment}-proxy
+      EngineFamily: POSTGRESQL
+      RequireTLS: true
+      RoleArn: !GetAtt ProxyRole.Arn
+      VpcSubnetIds:
+        - !ImportValue !Sub "jfc-db-subnet-a-${Environment}"
+        - !ImportValue !Sub "jfc-db-subnet-b-${Environment}"
+      VpcSecurityGroupIds:
+        - !ImportValue !Sub "jfc-proxy-sg-id-${Environment}"
+      Auth:
+        - AuthScheme: SECRETS
+          SecretArn: !Ref DatabaseSecretArn
+          IAMAuth: DISABLED
+
+  ProxyTargetGroup:
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref Proxy
+      TargetGroupName: default
+      DBClusterIdentifiers:
+        - Fn::ImportValue:
+            !Sub "${AuroraStackName}-ClusterIdentifier-${Environment}"
+
+Outputs:
+  ProxyEndpoint:
+    Description: El endpoint de conexión para el RDS Proxy.
+    Value: !GetAtt Proxy.Endpoint
+    Export:
+      Name: !Sub "jfc-rds-proxy-endpoint-${Environment}"
+  ProxyArn:
+    Description: El ARN del RDS Proxy.
+    Value: !Ref Proxy

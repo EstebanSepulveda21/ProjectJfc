@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: JFC Application Load Balancer.
+
+Parameters:
+  Environment:
+    Type: String
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet::Id
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet::Id
+  AlbSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+  CertificateArn:
+    Type: String
+
+Resources:
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub jfc-${Environment}-alb
+      Scheme: internet-facing
+      Type: application
+      SecurityGroups:
+      - !Ref AlbSecurityGroupId
+      Subnets:
+      - !Ref PublicSubnetA
+      - !Ref PublicSubnetB
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub jfc-${Environment}-tg
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref VpcId
+      HealthCheckEnabled: true
+      HealthCheckPath: /health
+      HealthCheckProtocol: HTTP
+      HealthCheckIntervalSeconds: 15
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+
+  HTTPSListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+      - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+      - Type: forward
+        TargetGroupArn: !Ref TargetGroup
+
+Outputs:
+  LoadBalancerArn:
+    Value: !Ref LoadBalancer
+  LoadBalancerDnsName:
+    Value: !GetAtt LoadBalancer.DNSName
+  TargetGroupArn:
+    Value: !Ref TargetGroup
+  LoadBalancerFullName:
+    Value: !GetAtt LoadBalancer.LoadBalancerFullName
+  TargetGroupFullName:
+    Value: !GetAtt TargetGroup.TargetGroupFullName

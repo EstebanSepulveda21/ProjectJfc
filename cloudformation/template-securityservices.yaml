@@ -1,0 +1,32 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC security baseline.
+
+Parameters:
+  Environment:
+    Type: String
+
+Resources:
+
+  SecurityHub:
+    Type: AWS::SecurityHub::Hub
+    Properties:
+      EnableDefaultStandards: true
+
+  GuardDuty:
+    Type: AWS::GuardDuty::Detector
+    Properties:
+      Enable: true
+
+  Inspector:
+    Type: AWS::InspectorV2::Enabler
+    Properties:
+      AccountIds:
+      - !Ref AWS::AccountId
+      ResourceTypes:
+      - ECR
+
+Outputs:
+  SecurityHub:
+    Value: !Ref SecurityHub
+  GuardDuty:
+    Value: !Ref GuardDuty

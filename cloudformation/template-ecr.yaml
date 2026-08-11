@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC Infrastructure - Amazon ECR Repository for Backend.
+
+Parameters:
+  Environment:
+    Type: String
+    Description: Entorno de despliegue (ej: dev, pdn).
+    AllowedValues: [dev, pdn]
+
+Resources:
+  BackendRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub jfc-backend-${Environment}
+      EncryptionConfiguration:
+        EncryptionType: KMS
+        KmsKey: !ImportValue !Sub "jfc-master-kms-arn-${Environment}"
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Mantener solo las últimas 15 imágenes tagged (ahorro costos)",
+                "selection": {
+                  "tagStatus": "tagged",
+                  "tagPrefixList": ["v"],
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 15
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+      Tags:
+        - Key: Name
+          Value: !Sub jfc-backend-${Environment}-repo
+        - Key: Environment
+          Value: !Ref Environment
+
+  RepositoryArn:
+    Description: El ARN del repositorio ECR Backend.
+    Value: !GetAtt BackendRepository.Arn
+    Export:
+      Name: !Sub "jfc-ecr-arn-backend-${Environment}"
+
+  RepositoryUri:
+    Description: La URI del repositorio ECR Backend (usada para docker push/pull).
+    Value: !GetAtt BackendRepository.RepositoryUri
+    Export:
+      Name: !Sub "jfc-ecr-uri-backend-${Environment}"

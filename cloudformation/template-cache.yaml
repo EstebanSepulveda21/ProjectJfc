@@ -1,0 +1,30 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: JFC ElastiCache Serverless.
+
+Parameters:
+  Environment:
+    Type: String
+  SubnetA:
+    Type: AWS::EC2::Subnet::Id
+  SubnetB:
+    Type: AWS::EC2::Subnet::Id
+  CacheSecurityGroupId:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+  Cache:
+    Type: AWS::ElastiCache::ServerlessCache
+    Properties:
+      Engine: valkey
+      ServerlessCacheName: !Sub jfc-${Environment}-cache
+      SubnetIds:
+      - !Ref SubnetA
+      - !Ref SubnetB
+      SecurityGroupIds:
+      - !Ref CacheSecurityGroupId
+
+Outputs:
+  CacheEndpoint:
+    Value: !GetAtt Cache.Endpoint.Address
+  CachePort:
+    Value: !GetAtt Cache.Endpoint.Port
