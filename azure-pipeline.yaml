@@ -1,4 +1,3 @@
-# azure-pipelines.yml
 parameters:
 - name: ambiente
   displayName: Ambiente
@@ -34,6 +33,11 @@ trigger:
     - main
     - feature/*
 
+pr:
+  branches:
+    include:
+    - main
+
 variables:
   system.debug: true
   projectName: 'JFC'
@@ -44,39 +48,39 @@ variables:
 
 stages:
 - stage: linters
-  displayName: 'Validar Plantillas CFN'
+  displayName: 'Validar Plantillas CFN y Seguridad'
   jobs:
-  - job: ValidateTemplates
-    displayName: 'Validar Sintaxis y CFN-Lint'
+  - job: ValidateAndScan
+    displayName: 'CFN-Lint y Checkov Security Scan'
     pool:
       vmImage: 'ubuntu-latest'
     steps:
     - checkout: self
-    - bash: pip install cfn-lint
-      displayName: 'Instalar cfn-lint'
+    
+    - bash: pip install cfn-lint checkov
+      displayName: 'Instalar cfn-lint y checkov'
+
+    - bash: cfn-lint $(templatesFolder)/*.yaml
+      displayName: 'Validación de sintaxis (cfn-lint)'
+
+    - bash: checkov -d $(templatesFolder) --framework cloudformation
+      displayName: 'Escaneo de Seguridad (Checkov)'
+
     - task: AWSShellScript@1
-      displayName: 'Validar Plantillas con credenciales temporales'
+      displayName: 'Validar Plantillas AWS CLI'
       inputs:
         awsCredentials: $(awsServiceConnection)
         regionName: $(awsRegion)
         scriptType: 'inline'
         inlineScript: |
-          echo "Validando plantillas en $(templatesFolder)..."
-
-          # Validación de AWS CLI (básica) - Solo los archivos .yaml relevantes
           for file in $(templatesFolder)/*.yaml; do
-            echo "Validando sintaxis AWS CLI: $file"
             aws cloudformation validate-template --template-body file://$file --region $(awsRegion) || exit 1
           done
-
-          # Validación de cfn-lint (profunda)
-          echo "Ejecutando cfn-lint..."
-          cfn-lint $(templatesFolder)/*.yaml
 
 - stage: deploy_dev
   displayName: 'Deploy Dev'
   dependsOn: linters
-  condition: eq('${{ parameters.ambiente }}', 'dev')
+  condition: and(succeeded(), eq('${{ parameters.ambiente }}', 'dev'), ne(variables['Build.Reason'], 'PullRequest'))
   variables:
     env: 'dev'
   jobs:
@@ -91,7 +95,7 @@ stages:
 - stage: deploy_qa
   displayName: 'Deploy Qa'
   dependsOn: linters
-  condition: eq('${{ parameters.ambiente }}', 'qa')
+  condition: and(succeeded(), eq('${{ parameters.ambiente }}', 'qa'), ne(variables['Build.Reason'], 'PullRequest'))
   variables:
     env: 'qa'
   jobs:
@@ -106,7 +110,7 @@ stages:
 - stage: deploy_pdn
   displayName: 'Deploy Pdn'
   dependsOn: linters
-  condition: eq('${{ parameters.ambiente }}', 'pdn')
+  condition: and(succeeded(), eq('${{ parameters.ambiente }}', 'pdn'), ne(variables['Build.Reason'], 'PullRequest'))
   variables:
     env: 'pdn'
   jobs:
